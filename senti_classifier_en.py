@@ -144,18 +144,14 @@ app.layout = dbc.Container(
 @app.callback(
     Output('display-prediction', 'children'), 
     [
-        Input('user-input', 'n_submit'), 
         Input('store-data', 'data')]
 )
-def update_display(user_input, sentiment_analysis):
+def update_display(sentiment_analysis):
     time.sleep(2)
-    if user_input is None or user_input == '':
-        return textbox(sentiment_analysis, box='other')
-    else:
-        return [
-            textbox(sentiment_analysis, box='self') if i % 2 == 0 else textbox(sentiment_analysis, box='other')
-            for i, sentiment_analysis in enumerate(sentiment_analysis)
-        ]
+    return [
+        textbox(sentiment_analysis, box='self') if i % 2 == 0 else textbox(sentiment_analysis, box='other')
+        for i, sentiment_analysis in enumerate(sentiment_analysis)
+    ]
 
 
 @app.callback(
@@ -178,42 +174,46 @@ def update_display(user_input, sentiment_analysis):
 def run_senti_model(n_clicks, n_submit, user_input, sentiment_analysis):
     if n_clicks == 0:
         sentiment_analysis = []
-        sentiment_analysis.append('How you feel?')
+        sentiment_analysis.append('🎭')
+        sentiment_analysis.append('How do you feel?')
         return sentiment_analysis, ''
 
 
     if user_input is None or user_input == '':
         sentiment_analysis = []
-        sentiment_analysis.append('How you feel?')
+        sentiment_analysis.append('🎭')
+        sentiment_analysis.append('How do you feel?')
         return sentiment_analysis, ''
 
+    else:
 
-    texto = user_input
-    texto = texto.translate(str.maketrans('', '', string.punctuation))
-    texto = texto.lower()
-    texto = unidecode.unidecode(texto)
-    sequence = encode_review(texto)
-    pad_text = keras.preprocessing.sequence.pad_sequences(sequence,
-                                                            value=word_index["<PAD>"],
-                                                            padding='post',
-                                                            maxlen=256)
+        texto = user_input
+        texto = texto.translate(str.maketrans('', '', string.punctuation))
+        texto = texto.lower()
+        texto = unidecode.unidecode(texto)
+        texto = [texto]
+        text = tokenizer.texts_to_sequences(texto)
+        padded_text = keras.preprocessing.sequence.pad_sequences(text,
+                                                                value=word_index["<PAD>"],
+                                                                padding='post',
+                                                                maxlen=256)
+        
+        prediction = model.predict(padded_text)
 
-    prediction = model.predict(pad_text)
+        if prediction[0][0] <= 0.5:
+            pred = 1 - prediction[0][0]
+            pred = '{:,.2f}'.format(pred * 100) + ' %'
+            response = f'Negative Sentiment 😔 \n {pred}'
 
-    if prediction[0][0] <= 0.5:
-        pred = 1 - prediction[0][0]
-        pred = '{:,.2f}'.format(pred * 100) + ' %'
-        response = f'Negative Sentiment 😔 \n {pred}'
+        elif prediction[0][0] >= 0.5:
+            pred = '{:,.2f}'.format(prediction[0][0] * 100) + ' %'
+            response = f'Positive Sentiment 😊 \n {pred}'
+    
+        sentiment_analysis = []
+        sentiment_analysis.append(user_input)
+        sentiment_analysis.append(response)
 
-    elif prediction[0][0] >= 0.5:
-        pred = '{:,.2f}'.format(prediction[0][0] * 100) + ' %'
-        response = f'Positive Sentiment 😊 \n {pred}'
-   
-    sentiment_analysis = []
-    sentiment_analysis.append(user_input)
-    sentiment_analysis.append(response)
-
-    return sentiment_analysis, ''
+        return sentiment_analysis, ''
 
 if __name__ == '__main__':
     app.run_server(debug=False)
